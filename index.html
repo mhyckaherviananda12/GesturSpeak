@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Gesture Translator</title>
+    
+    <!-- Font Inter (Standar Web Modern) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Library MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        /* === DESAIN CLEAN & PROFESIONAL === */
+        :root {
+            --bg-page: #f3f4f6;       /* Abu-abu sangat muda */
+            --bg-card: #ffffff;       /* Putih bersih */
+            --text-main: #111827;     /* Abu-abu sangat gelap (hampir hitam) */
+            --text-muted: #6b7280;    /* Abu-abu teks sekunder */
+            --border-color: #e5e7eb;  /* Abu-abu garis batas */
+            --primary: #2563eb;       /* Biru profesional */
+            --primary-hover: #1d4ed8;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+
+        body {
+            margin: 0; 
+            padding: 20px;
+            background-color: var(--bg-page); 
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        /* Container Card Utama */
+        .app-container {
+            background-color: var(--bg-card);
+            width: 100%;
+            max-width: 720px;
+            border-radius: var(--radius-lg);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 32px;
+            text-align: center;
+        }
+
+        header {
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        p.subtitle {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Area Kamera */
+        .camera-section {
+            background-color: #000;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            transform: scaleX(-1); /* Cermin */
+        }
+
+        #videoElement { display: none; }
+
+        /* Panel Output (Hasil Terjemahan) */
+        .output-section {
+            background-color: var(--bg-page);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .output-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #output-text {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin: 4px 0 0 0;
+        }
+
+        /* Tombol Start */
+        #startButton {
+            background-color: var(--primary);
+            color: white;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 500;
+            padding: 12px 24px;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        #startButton:hover {
+            background-color: var(--primary-hover);
+        }
+
+        /* Menyembunyikan UI utama sebelum mulai */
+        #main-ui { display: none; }
+
+        @media (max-width: 600px) {
+            .app-container { padding: 20px; }
+            .output-section { flex-direction: column; align-items: flex-start; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>Sistem Penerjemah Isyarat</h1>
+            <p class="subtitle">Deteksi pergerakan tangan ke dalam teks dan suara secara real-time</p>
+        </header>
+
+        <!-- Tampilan Awal (Hanya Tombol) -->
+        <div id="start-section">
+            <button id="startButton">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                Aktifkan Sistem
+            </button>
+        </div>
+
+        <!-- Tampilan Utama (Setelah Mulai) -->
+        <div id="main-ui">
+            <div class="camera-section">
+                <canvas id="outputCanvas" width="640" height="480"></canvas>
+            </div>
+            
+            <div class="output-section">
+                <div>
+                    <div class="output-label">Status Deteksi</div>
+                    <div id="output-text">Menunggu gestur...</div>
+                </div>
+                <!-- Indikator visual kecil -->
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12h4l3-9 5 18 3-9h5"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <video id="videoElement" autoplay playsinline></video>
+
+    <!-- LOGIKA JAVASCRIPT -->
+    <script>
+        const videoElement = document.getElementById('videoElement');
+        const canvasElement = document.getElementById('outputCanvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const outputText = document.getElementById('output-text');
+        const startButton = document.getElementById('startButton');
+        const startSection = document.getElementById('start-section');
+        const mainUI = document.getElementById('main-ui');
+
+        let lastSpoken = ""; 
+        let speechVoices = [];
+
+        function initTTS() {
+            speechVoices = window.speechSynthesis.getVoices();
+        }
+        window.speechSynthesis.onvoiceschanged = initTTS;
+
+        function speak(text) {
+            if (text !== lastSpoken) {
+                window.speechSynthesis.cancel(); 
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                
+                let selectedVoice = speechVoices.find(v => v.lang.includes('id') && v.name.toLowerCase().includes('female')) 
+                                 || speechVoices.find(v => v.lang.includes('id-ID'))
+                                 || speechVoices[0];
+                
+                if (selectedVoice) utterance.voice = selectedVoice;
+                utterance.rate = 1.5; 
+                
+                window.speechSynthesis.speak(utterance);
+                
+                lastSpoken = text;
+                outputText.innerText = text;
+            }
+        }
+
+        const gestureDictionary = {
+            '1,1,1,1,1': "Halo",
+            '0,0,0,0,0': "Stop",
+            '1,0,0,0,0': "Bagus",
+            '0,1,0,0,0': "Lihat",
+            '0,1,1,0,0': "Damai",
+            '1,0,0,0,1': "Telepon",
+            '1,1,0,0,1': "Aku cinta kamu",
+            '0,1,0,0,1': "Musik",
+            '1,1,0,0,0': "Lanjut",
+            '0,1,1,1,1': "Tunggu",
+            '0,0,0,0,1': "Janji"
+        };
+
+        function processGestures(landmarks) {
+            const tipIds = [4, 8, 12, 16, 20];
+            let fingers = [];
+            
+            if (landmarks[tipIds[0]].x > landmarks[tipIds[0] - 1].x) {
+                fingers.push(1);
+            } else {
+                fingers.push(0);
+            }
+
+            for (let i = 1; i < 5; i++) {
+                if (landmarks[tipIds[i]].y < landmarks[tipIds[i] - 2].y) {
+                    fingers.push(1);
+                } else {
+                    fingers.push(0);
+                }
+            }
+
+            const fingerStr = fingers.join(',');
+
+            if (gestureDictionary[fingerStr]) {
+                speak(gestureDictionary[fingerStr]);
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0, 
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults((results) => {
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Ubah warna skeleton tangan jadi biru profesional agar tidak terlihat seperti game
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#2563eb', lineWidth: 3});
+                drawLandmarks(canvasCtx, landmarks, {color: '#ffffff', lineWidth: 2, radius: 3});
+
+                processGestures(landmarks);
+            } else {
+                lastSpoken = "";
+                outputText.innerText = "Menunggu gestur...";
+            }
+        });
+
+        startButton.addEventListener('click', () => {
+            const utterance = new SpeechSynthesisUtterance("");
+            window.speechSynthesis.speak(utterance);
+            
+            startSection.style.display = 'none';
+            mainUI.style.display = 'block';
+
+            const camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({image: videoElement});
+                },
+                width: 640,
+                height: 480
+            });
+            camera.start();
+        });
+    </script>
+</body>
+</html>
